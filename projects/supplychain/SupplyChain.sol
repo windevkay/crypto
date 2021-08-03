@@ -1,12 +1,39 @@
 // SPDX-License-Identifier: GPL-3.0
 pragma solidity >=0.7.0 <0.9.0;
 
+contract Item {
+    uint public priceInWei;
+    uint public pricePaid;
+    uint public index;
+    ItemManager parentContract;
+    
+    constructor(ItemManager _parentContract, uint _priceInWei, uint _index) {
+        priceInWei = _priceInWei;
+        index = _index;
+        parentContract = _parentContract;
+    }
+    
+    // the receive is triggerd for calls to the contract on plain ether transfers
+    receive () external payable{
+        require(pricePaid == 0, 'Item has already been paid for');
+        require(priceInWei == msg.value, 'A full payment for the item is required');
+        pricePaid += msg.value;
+        // send money to the parent contracts trigger payment method
+        (bool success, ) = address(parentContract).call{value:msg.value}(abi.encodeWithSignature('triggerPayment(uint256)',index));
+        // if the transaction wasnt successful then cancel
+        require(success, 'The transaction was not successful, cancelling...');
+    }
+    
+    fallback() external payable {}
+}
+
 contract ItemManager {
     // state enum to denote state of an item 
     enum SupplyChainState { Created, Paid, Delivered }
     
-    // data structure to hold created items
+    // data structure to hold generic created items
     struct S_Item {
+        Item _item;
         string _identifier; 
         uint _itemPrice;
         ItemManager.SupplyChainState _state;
@@ -17,16 +44,20 @@ contract ItemManager {
     uint itemIndex;
     
     // event for supply chain functions 
-    event SupplyChainstep(uint _itemIndex, uint _step);
+    event SupplyChainstep(uint _itemIndex, uint _step, address _itemAddress);
     
     // function to create an item
     function createItem(string memory _identifier, uint _itemPrice) public {
+        // create new Item 
+        Item item = new Item(this, _itemPrice, itemIndex);
+        
+        items[itemIndex]._item = item;
         items[itemIndex]._identifier = _identifier;
         items[itemIndex]._itemPrice = _itemPrice;
         items[itemIndex]._state = SupplyChainState.Created;
         
         // emit operation event 
-        emit SupplyChainstep(itemIndex, uint(items[itemIndex]._state));
+        emit SupplyChainstep(itemIndex, uint(items[itemIndex]._state), address(item));
         itemIndex++;
     }
     
@@ -41,7 +72,7 @@ contract ItemManager {
         items[_itemIndex]._state = SupplyChainState.Paid;
         
         // emit operation event 
-        emit SupplyChainstep(itemIndex, uint(items[itemIndex]._state));
+        emit SupplyChainstep(_itemIndex, uint(items[_itemIndex]._state), address(items[_itemIndex]._item));
     }
     
     // function to handle the delivery of the item 
@@ -53,6 +84,6 @@ contract ItemManager {
         items[_itemIndex]._state = SupplyChainState.Delivered;
         
         // emit operation event 
-        emit SupplyChainstep(itemIndex, uint(items[itemIndex]._state));
+        emit SupplyChainstep(_itemIndex, uint(items[_itemIndex]._state), address(items[_itemIndex]._item));
     }
 }
