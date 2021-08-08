@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0
 pragma solidity >=0.7.0 <0.9.0;
 
+// only the account that deploys this contract should have access to create and delivery 
+import 'https://github.com/OpenZeppelin/openzeppelin-contracts/blob/master/contracts/access/Ownable.sol';
+
 contract Item {
     uint public priceInWei;
     uint public pricePaid;
@@ -27,7 +30,7 @@ contract Item {
     fallback() external payable {}
 }
 
-contract ItemManager {
+contract ItemManager is Ownable {
     // state enum to denote state of an item 
     enum SupplyChainState { Created, Paid, Delivered }
     
@@ -47,7 +50,7 @@ contract ItemManager {
     event SupplyChainstep(uint _itemIndex, uint _step, address _itemAddress);
     
     // function to create an item
-    function createItem(string memory _identifier, uint _itemPrice) public {
+    function createItem(string memory _identifier, uint _itemPrice) public onlyOwner {
         // create new Item 
         Item item = new Item(this, _itemPrice, itemIndex);
         
@@ -76,7 +79,7 @@ contract ItemManager {
     }
     
     // function to handle the delivery of the item 
-    function triggerDelivery(uint _itemIndex) public {
+    function triggerDelivery(uint _itemIndex) public onlyOwner {
         // check that the item has been paid for 
         require(items[_itemIndex]._state == SupplyChainState.Paid, 'Item is not in paid state');
         
